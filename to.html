@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>디지털 실적 대시보드</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', 'Pretendard', sans-serif; }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+
+    <div class="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
+        <!-- Header -->
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="layout-dashboard" class="text-blue-600"></i>
+                    디지털 실적 분석 대시보드
+                </h1>
+                <p class="text-slate-500 text-sm mt-1">로컬 CSV 파일을 활용한 거래처 중심 실시간 성과 시각화</p>
+            </div>
+            <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-lg cursor-pointer hover:bg-slate-50 transition-all shadow-sm text-sm font-medium">
+                    <i data-lucide="upload-cloud" class="w-4 h-4 text-blue-500"></i>
+                    CSV 파일 불러오기
+                    <input type="file" id="csvFileInput" accept=".csv" class="hidden" />
+                </label>
+            </div>
+        </div>
+
+        <!-- Initial Placeholder -->
+        <div id="placeholder" class="bg-white border-2 border-dashed border-slate-200 rounded-2xl p-20 flex flex-col items-center justify-center text-center space-y-4 shadow-sm">
+            <div class="w-16 h-16 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center">
+                <i data-lucide="bar-chart-3" class="w-8 h-8"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-semibold">데이터가 아직 없습니다</h3>
+                <p class="text-slate-500 max-w-sm mx-auto mt-1">파일을 업로드하시면 대시보드가 활성화됩니다.</p>
+            </div>
+        </div>
+
+        <!-- Dashboard Content (Hidden initially) -->
+        <div id="dashboardContent" class="hidden space-y-6">
+            
+            <!-- Filters -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-4 items-center">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="calendar" class="w-4 h-4 text-slate-400"></i>
+                    <select id="yearFilter" class="bg-slate-50 border-none text-sm rounded-md px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="all">연도 전체</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i data-lucide="layers" class="w-4 h-4 text-slate-400"></i>
+                    <select id="pathFilter" class="bg-slate-50 border-none text-sm rounded-md px-3 py-1.5 focus:ring-2 focus:ring-blue-500 outline-none">
+                        <option value="all">경로 전체</option>
+                    </select>
+                </div>
+                <div class="text-xs text-slate-400 ml-auto" id="dataCount">데이터 확인 중...</div>
+            </div>
+
+            <!-- KPI Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase">누적 매출액</span>
+                        <i data-lucide="dollar-sign" class="w-4 h-4 text-blue-500"></i>
+                    </div>
+                    <div class="text-2xl font-bold" id="kpiRevenue">0</div>
+                    <p class="text-[10px] text-slate-400 mt-1">선택 범위 내 총합</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-emerald-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase">영업이익</span>
+                        <i data-lucide="trending-up" class="w-4 h-4 text-emerald-500"></i>
+                    </div>
+                    <div class="text-2xl font-bold text-emerald-600" id="kpiProfit">0</div>
+                    <p class="text-[10px] text-slate-400 mt-1">수익 기여도 합계</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-orange-400">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase">영업이익률</span>
+                        <i data-lucide="percent" class="w-4 h-4 text-orange-400"></i>
+                    </div>
+                    <div class="text-2xl font-bold" id="kpiMargin">0%</div>
+                    <p class="text-[10px] text-slate-400 mt-1">평균 효율성</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500">
+                    <div class="flex justify-between items-start mb-2">
+                        <span class="text-xs font-semibold text-slate-500 uppercase">분석 거래처</span>
+                        <i data-lucide="users" class="w-4 h-4 text-indigo-500"></i>
+                    </div>
+                    <div class="text-2xl font-bold" id="kpiCustomers">0개</div>
+                    <p class="text-[10px] text-slate-400 mt-1">고유 고객사 수</p>
+                </div>
+            </div>
+
+            <!-- Charts Row 1 -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                        <i data-lucide="area-chart" class="w-5 h-5 text-blue-500"></i>
+                        월별 전체 실적 및 이익 추세
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-5 h-5 text-emerald-500"></i>
+                        거래처별 매출 비중
+                    </h3>
+                    <div class="chart-container">
+                        <canvas id="customerPieChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Customers Trend Chart (New Multi-Line Chart) -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <h3 class="text-lg font-bold mb-6 flex items-center gap-2">
+                    <i data-lucide="trending-up" class="w-5 h-5 text-indigo-500"></i>
+                    주요 거래처별 매출 추이 (Top 5)
+                </h3>
+                <div class="chart-container" style="height: 400px;">
+                    <canvas id="topCustTrendChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Customer Table -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                    <div>
+                        <h3 class="text-lg font-bold">고객사별 수익성 및 장기 성장(CAGR) 분석</h3>
+                        <p class="text-xs text-slate-500 mt-1">조회된 기간 내 연평균 성장률(CAGR) 및 최근월 이익 증감 분석</p>
+                    </div>
+                </div>
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50/80 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                                <th class="px-6 py-4">고객사명</th>
+                                <th class="px-6 py-4">경로</th>
+                                <th class="px-6 py-4 text-right">최근 매출</th>
+                                <th class="px-6 py-4 text-right">CAGR(연평균 성장)</th>
+                                <th class="px-6 py-4 text-right">최근 영업이익</th>
+                                <th class="px-6 py-4 text-right">최근 이익 변화액</th>
+                            </tr>
+                        </thead>
+                        <tbody id="customerTableBody" class="divide-y divide-slate-100 text-sm">
+                            <!-- Rows inserted via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // Global variables for data and charts
+        let rawData = [];
+        let trendChartObj = null;
+        let customerPieChartObj = null;
+        let topCustTrendChartObj = null;
+
+        const CHART_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Helper: Format KRW
+        function formatKrw(val) {
+            if (val >= 100000000) return (val / 100000000).toFixed(1) + '억';
+            if (val >= 10000) return (val / 10000).toFixed(0) + '만';
+            return val.toLocaleString();
+        }
+
+        // CSV Parser (handles quotes and commas)
+        function parseCSV(text) {
+            const rows = [];
+            let row = [];
+            let inQuotes = false;
+            let cell = '';
+            
+            for (let i = 0; i < text.length; i++) {
+                const char = text[i];
+                if (char === '"') {
+                    if (inQuotes && text[i+1] === '"') {
+                        cell += '"';
+                        i++; 
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    row.push(cell);
+                    cell = '';
+                } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                    if (char === '\r' && text[i+1] === '\n') i++;
+                    row.push(cell);
+                    if (row.join('').trim() !== '') rows.push(row);
+                    row = [];
+                    cell = '';
+                } else {
+                    cell += char;
+                }
+            }
+            if (cell || row.length > 0) {
+                row.push(cell);
+                if (row.join('').trim() !== '') rows.push(row);
+            }
+
+            if (rows.length < 2) return [];
+
+            const rawHeaders = rows[0].map(h => h.trim().replace(/\n/g, '').replace(/\r/g, ''));
+            const headers = [];
+            const headerCounts = {};
+            
+            // 동일한 이름의 헤더(예: 영업이익)가 여러 개 있을 경우 중복 방지 (영업이익_2 로 변경)
+            rawHeaders.forEach(h => {
+                if (headerCounts[h]) {
+                    headerCounts[h]++;
+                    headers.push(`${h}_${headerCounts[h]}`);
+                } else {
+                    headerCounts[h] = 1;
+                    headers.push(h);
+                }
+            });
+            
+            return rows.slice(1).map(row => {
+                const obj = {};
+                headers.forEach((header, i) => {
+                    let val = row[i] !== undefined ? row[i].trim() : '';
+                    
+                    // 엑셀 수식 오류(#DIV/0! 등)를 0으로 치환하여 문자열 결합 방지
+                    if (val.startsWith('#')) val = '0';
+
+                    if (!isNaN(val) && val !== '' && !header.includes('역월') && !header.includes('번호')) {
+                        obj[header] = parseFloat(val);
+                    } else {
+                        obj[header] = val;
+                    }
+                });
+                
+                const dateStr = String(obj['역년/역월'] || '');
+                if (dateStr.includes('.')) {
+                    const [y, m] = dateStr.split('.');
+                    obj.year = y;
+                    obj.month = m;
+                }
+                
+                obj.customerName = row[3] ? row[3].trim() : 'Unknown';
+                
+                return obj;
+            });
+        }
+
+        // Main Update Function
+        function updateDashboard() {
+            const yearFilter = document.getElementById('yearFilter').value;
+            const pathFilter = document.getElementById('pathFilter').value;
+
+            // Apply Filters to raw data
+            const filtered = rawData.filter(d => {
+                const yMatch = yearFilter === 'all' || d.year === yearFilter;
+                const pMatch = pathFilter === 'all' || d['경로'] === pathFilter;
+                return yMatch && pMatch;
+            });
+
+            document.getElementById('dataCount').innerText = `필터링된 데이터: ${filtered.length.toLocaleString()}건`;
+
+            if (filtered.length === 0) {
+                // Handle empty state gracefully if needed
+                return;
+            }
+
+            // 1. KPI Calculation (문자열 결합 방지를 위해 Number 강제 변환)
+            const totalRev = filtered.reduce((sum, d) => sum + (Number(d['매출액']) || 0), 0);
+            const totalProfit = filtered.reduce((sum, d) => sum + (Number(d['영업이익']) || 0), 0);
+            const avgMargin = totalRev !== 0 ? (totalProfit / totalRev) * 100 : 0;
+            const uniqueCusts = new Set(filtered.map(d => d.customerName)).size;
+
+            document.getElementById('kpiRevenue').innerText = formatKrw(totalRev);
+            document.getElementById('kpiProfit').innerText = formatKrw(totalProfit);
+            document.getElementById('kpiMargin').innerText = avgMargin.toFixed(1) + '%';
+            document.getElementById('kpiCustomers').innerText = uniqueCusts + '개';
+
+            // 2. Total Trend Chart Data
+            const monthlyData = {};
+            filtered.forEach(d => {
+                const key = `${d.year}.${d.month}`;
+                if (!monthlyData[key]) monthlyData[key] = { rev: 0, profit: 0 };
+                monthlyData[key].rev += Number(d['매출액']) || 0;
+                monthlyData[key].profit += Number(d['영업이익']) || 0;
+            });
+            const allMonths = Object.keys(monthlyData).sort();
+            renderTrendChart(allMonths, monthlyData);
+
+            // 3. Customer Pie Chart Data (Top 5 + Others)
+            const custRevMap = {};
+            filtered.forEach(d => {
+                const key = d.customerName || '알수없음';
+                custRevMap[key] = (custRevMap[key] || 0) + (Number(d['매출액']) || 0);
+            });
+            
+            const sortedCustEntries = Object.entries(custRevMap).sort((a, b) => b[1] - a[1]);
+            const top5ForPie = sortedCustEntries.slice(0, 5);
+            const othersRev = sortedCustEntries.slice(5).reduce((sum, [, val]) => sum + val, 0);
+            
+            const pieLabels = top5ForPie.map(c => c[0]);
+            const pieData = top5ForPie.map(c => c[1]);
+            
+            if (othersRev > 0) {
+                pieLabels.push('기타');
+                pieData.push(othersRev);
+            }
+            renderCustomerPieChart(pieLabels, pieData);
+
+            // 4. Customer Detailed Analysis (CAGR & Trends)
+            // Note: We use the 'filtered' dataset to compute CAGRs for the *selected period*
+            const allCustNames = [...new Set(filtered.map(d => d.customerName))];
+            
+            const custAnalysis = allCustNames.map(name => {
+                const cData = filtered.filter(d => d.customerName === name)
+                    .sort((a, b) => {
+                        const timeA = parseInt(a.year) * 12 + parseInt(a.month);
+                        const timeB = parseInt(b.year) * 12 + parseInt(b.month);
+                        return timeA - timeB;
+                    });
+                
+                if (cData.length === 0) return null;
+                
+                const earliest = cData[0];
+                const latest = cData[cData.length - 1];
+                const prev = cData.length > 1 ? cData[cData.length - 2] : null;
+
+                // CAGR Calculation
+                const revFirst = Number(earliest['매출액']) || 0;
+                const revLast = Number(latest['매출액']) || 0;
+                
+                const timeFirst = parseInt(earliest.year) * 12 + parseInt(earliest.month);
+                const timeLast = parseInt(latest.year) * 12 + parseInt(latest.month);
+                const monthsDiff = timeLast - timeFirst;
+                
+                let cagr = null; // null represents "N/A"
+                if (monthsDiff > 0 && revFirst > 0) {
+                    const years = monthsDiff / 12;
+                    cagr = (Math.pow(revLast / revFirst, 1 / years) - 1) * 100;
+                } else if (monthsDiff > 0 && revFirst <= 0 && revLast > 0) {
+                    cagr = 999; // 신규/무한대 표시용
+                }
+
+                // Recent Profit Difference
+                const profitDiff = prev ? (Number(latest['영업이익']) || 0) - (Number(prev['영업이익']) || 0) : 0;
+
+                return {
+                    name,
+                    path: latest['경로'],
+                    revenue: revLast,
+                    totalRev: custRevMap[name], // Used for sorting Top 5
+                    profit: Number(latest['영업이익']) || 0,
+                    cagr,
+                    monthsDiff,
+                    profitDiff
+                };
+            }).filter(d => d !== null).sort((a, b) => b.totalRev - a.totalRev);
+
+            // Render Table (Top 15 by Total Revenue in the period)
+            renderCustomerTable(custAnalysis.slice(0, 15));
+
+            // 5. Multi-line Trend Chart for Top 5 Customers
+            const top5Names = custAnalysis.slice(0, 5).map(c => c.name);
+            const trendDatasets = top5Names.map((name, i) => {
+                const dataMap = {};
+                filtered.forEach(d => {
+                    if (d.customerName === name) {
+                        const key = `${d.year}.${d.month}`;
+                        dataMap[key] = (dataMap[key] || 0) + (Number(d['매출액']) || 0);
+                    }
+                });
+                return {
+                    label: name,
+                    data: allMonths.map(m => dataMap[m] || 0),
+                    borderColor: CHART_COLORS[i % CHART_COLORS.length],
+                    backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+                    tension: 0.3,
+                    fill: false,
+                    borderWidth: 2
+                };
+            });
+            renderTopCustTrendChart(allMonths, trendDatasets);
+        }
+
+        // --- Chart Render Functions ---
+
+        function renderTrendChart(labels, dataMap) {
+            const ctx = document.getElementById('trendChart').getContext('2d');
+            if (trendChartObj) trendChartObj.destroy();
+
+            trendChartObj = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: '총 매출액',
+                            data: labels.map(l => dataMap[l].rev),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            fill: true,
+                            tension: 0.3
+                        },
+                        {
+                            label: '총 영업이익',
+                            data: labels.map(l => dataMap[l].profit),
+                            borderColor: '#10b981',
+                            backgroundColor: '#10b981',
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'top' } },
+                    scales: {
+                        y: { 
+                            ticks: { callback: (v) => formatKrw(v) },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderCustomerPieChart(labels, data) {
+            const ctx = document.getElementById('customerPieChart').getContext('2d');
+            if (customerPieChartObj) customerPieChartObj.destroy();
+
+            customerPieChartObj = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: CHART_COLORS
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { boxWidth: 12, padding: 15 } }
+                    }
+                }
+            });
+        }
+
+        function renderTopCustTrendChart(labels, datasets) {
+            const ctx = document.getElementById('topCustTrendChart').getContext('2d');
+            if (topCustTrendChartObj) topCustTrendChartObj.destroy();
+
+            topCustTrendChartObj = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: { 
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) label += ': ';
+                                    if (context.parsed.y !== null) {
+                                        label += formatKrw(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: { 
+                            ticks: { callback: (v) => formatKrw(v) },
+                            grid: { color: '#f1f5f9' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        }
+
+        function renderCustomerTable(data) {
+            const tbody = document.getElementById('customerTableBody');
+            tbody.innerHTML = '';
+
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-slate-50 transition-colors';
+                
+                // CAGR Formatting
+                let cagrDisplay = '-';
+                let cagrClass = 'text-slate-400';
+                
+                if (item.cagr === 999) {
+                    cagrDisplay = '신규/급증';
+                    cagrClass = 'text-blue-600 font-bold';
+                } else if (item.cagr !== null) {
+                    const isPositive = item.cagr >= 0;
+                    cagrDisplay = `${isPositive ? '↑' : '↓'} ${Math.abs(item.cagr).toFixed(1)}%`;
+                    cagrClass = isPositive ? 'text-emerald-600 font-bold' : 'text-rose-600 font-bold';
+                } else if (item.monthsDiff === 0) {
+                    cagrDisplay = '데이터 부족(1개월)';
+                }
+
+                // Profit Formatting
+                const profitColor = item.profitDiff >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700';
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 font-medium text-slate-700">${item.name}</td>
+                    <td class="px-6 py-4"><span class="bg-slate-100 px-2 py-0.5 rounded text-[10px] text-slate-500">${item.path}</span></td>
+                    <td class="px-6 py-4 text-right font-mono">${formatKrw(item.revenue)}</td>
+                    <td class="px-6 py-4 text-right ${cagrClass}">${cagrDisplay}</td>
+                    <td class="px-6 py-4 text-right font-mono text-slate-600">${formatKrw(item.profit)}</td>
+                    <td class="px-6 py-4 text-right">
+                        <span class="px-2 py-1 rounded text-[11px] font-semibold ${profitColor}">
+                            ${item.profitDiff >= 0 ? '+' : ''}${formatKrw(item.profitDiff)}
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // --- Event Listeners ---
+
+        document.getElementById('csvFileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const text = event.target.result;
+                rawData = parseCSV(text);
+                
+                if (rawData.length > 0) {
+                    // Populate Filters
+                    const years = [...new Set(rawData.map(d => d.year))].sort();
+                    const paths = [...new Set(rawData.map(d => d['경로']))].sort();
+                    
+                    const yFilter = document.getElementById('yearFilter');
+                    const pFilter = document.getElementById('pathFilter');
+                    
+                    // Reset dropdowns
+                    yFilter.innerHTML = '<option value="all">연도 전체</option>';
+                    pFilter.innerHTML = '<option value="all">경로 전체</option>';
+
+                    years.forEach(y => {
+                        if(!y) return;
+                        const opt = document.createElement('option');
+                        opt.value = y; opt.innerText = y + '년';
+                        yFilter.appendChild(opt);
+                    });
+                    
+                    paths.forEach(p => {
+                        if(!p) return;
+                        const opt = document.createElement('option');
+                        opt.value = p; opt.innerText = p;
+                        pFilter.appendChild(opt);
+                    });
+
+                    // UI Switch
+                    document.getElementById('placeholder').classList.add('hidden');
+                    document.getElementById('dashboardContent').classList.remove('hidden');
+                    
+                    updateDashboard();
+                }
+            };
+            // Ensure Korean characters are read correctly (EUC-KR fallback for Excel CSVs)
+            reader.readAsText(file, "EUC-KR");
+        });
+
+        // Filter Events
+        document.getElementById('yearFilter').addEventListener('change', updateDashboard);
+        document.getElementById('pathFilter').addEventListener('change', updateDashboard);
+
+    </script>
+</body>
+</html>
